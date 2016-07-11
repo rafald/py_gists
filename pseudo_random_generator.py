@@ -1,7 +1,5 @@
 import random
 
-import random
-
 
 def decompose(n):
     exponentOfTwo = 0
