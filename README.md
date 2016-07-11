@@ -1,1 +1,3 @@
-# py_gists
+# py_snippets
+
+sandbox for experiments with Python
