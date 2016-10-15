@@ -11,5 +11,5 @@ for i in xrange(len(first_names)):
 # Using zip:
 for first_name, last_name, height in zip(first_names, last_names, heights_in_cm):
     print "Name: %s %s" % (first_name, last_name)
-    print "Height in CM: %s" % height_in_cm
+    print "Height in CM: %s" % height
     
