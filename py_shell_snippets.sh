@@ -7,7 +7,8 @@ python3 -m pip list
              
 alias venv3='python3 -m venv '
 
-
+# list all version of the package
+pip3 install mercurial==
 
 
 
