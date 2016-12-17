@@ -7,6 +7,8 @@ import subprocess
 import sys
 import queue # multiprocessing.Queue
 import json
+from collections import defaultdict
+import time
 
 import pyperclip
 import pickle
@@ -17,24 +19,34 @@ def qualify_url(url):
     return False
 
 def Destination(dump):
-   return [l for l in dump.split('\n') if l.startswith("[download] Destination:")]
+   PFX = "[download] Destination:"
+   PFX_LEN = len(PFX)
+   return [l[PFX_LEN:] for l in dump.split('\n') if l.startswith(PFX)]
    
-def download(url, failed):
-   print ("Launching youtube-dl to download %s" % (url) )
+def download(url, failed, history_names):
+   msg = "Launching youtube-dl to download %s" % (url)
+   print(msg)
+   subprocess.run(['notify-send', '-u', 'critical', msg]) # call is nonblocking
+   
    cmd = ["youtube-dl", "-t", "--restrict-filenames", "-c", url]
    if "https_proxy" in os.environ :
       cmd.append("--proxy={}".format(os.environ['https_proxy']))
    completed = subprocess.run(cmd, stdout=subprocess.PIPE, universal_newlines=True) 
+   
+   th_name = threading.current_thread().name
    if completed.returncode != 0:
-      failed.put(url)
-      print ("FAILED!: %s" % (completed))
-   else : print ("FINISHED: {}".format(Destination(completed.stdout)) )
+      failed.put((url,completed.stdout))
+      print ("FAILED %s! : %s" % (th_name, completed))
+   else : 
+      print ("FINISHED {}: {}".format(th_name, Destination(completed.stdout)) )
+      history_names[url] = Destination(completed.stdout) # TODO unsafe - pass back lamdba to failed queue not a value
 
-def fix_history(failed, history, history_failed):
+def fix_history(failed, history, history_failed, history_names):
    while not failed.empty():
-      url = failed.get()
-      history.remove(url)
-      history_failed.add(url)
+      url,log = failed.get()
+      del history[url]
+      history_failed[url]=time.time()
+      history_names[url]=Destination(log)
 
 def sdefault(o):
     if isinstance(o, set):
@@ -51,58 +63,76 @@ def idefault(o):
 
 HISTORY_FILE = 'history.json' # with open(history_file, 'wb') as f:
 HISTORY_FAILED_FILE = 'history_failed.json'
+HISTORY_NAMES_FILE = 'history_names.json'
 HR_OPTS = dict(sort_keys=True, indent=4, default=idefault)
 
-def save(history, history_failed):
+def save(history, history_failed, history_names):
    with open(HISTORY_FILE, 'w') as hf:
        # Pickle the 'data' dictionary using the highest protocol available.
        #pickle.dump(history, f, pickle.HIGHEST_PROTOCOL)
        json.dump(history, hf, **HR_OPTS)
    with open(HISTORY_FAILED_FILE, 'w') as hff:
-       # Pickle the 'data' dictionary using the highest protocol available.
        #pickle.dump(history_failed, f, pickle.HIGHEST_PROTOCOL)
        json.dump(history_failed, hff, **HR_OPTS)
+   with open(HISTORY_NAMES_FILE, 'w') as hnf:
+       #pickle.dump(history_failed, f, pickle.HIGHEST_PROTOCOL)
+       json.dump(history_names, hnf, **HR_OPTS)
 
-def try_load(history, history_failed):
+def try_load():
+   history = defaultdict(time.time)
+   history_failed = defaultdict(time.time)
+   history_names = defaultdict(list)
+   
    if os.path.isfile(HISTORY_FILE) :
       with open(HISTORY_FILE, 'r') as f:
           # The protocol version used is detected automatically, so we do not
           # have to specify it.
           #history = pickle.load(f)
-          history = set(json.load(f))
+          history = json.load(f) #history = set(json.load(f))
    else : print("Missing history file {} (OK if this is the 1st run)".format(HISTORY_FILE,))
    if os.path.isfile(HISTORY_FAILED_FILE) :
       with open(HISTORY_FAILED_FILE, 'r') as f:
+         print("loading HISTORY_FAILED_FILE")
          #history_failed = pickle.load(f)
-         history_failed = set(json.load(f))
-         #outfile = options.outfile or sys.stdout
-         json.dump(HISTORY_FAILED_FILE, sys.stdout, **HR_OPTS)
-         sys.stdout.write('\n')
+         history_failed = json.load(f)
+   if os.path.isfile(HISTORY_NAMES_FILE) :
+      with open(HISTORY_NAMES_FILE, 'r') as f:
+         print("loading HISTORY_NAMES_FILE")
+         #history_names = pickle.load(f)
+         history_names = json.load(f) 
+   return (history, history_failed, history_names)
          
 WATCH_IDLE_PERIOD = 1
           
 def main():
    try:
-      # TODO merge to DS with .add .failed .retry
-      history = set()
-      history_failed = set()
+      # TODO merge (history, history_failed) to DS with .add .failed .retry
+      # can also sync with json repr on hd
+      history, history_failed, history_names = try_load()
+      import operator
       
-      try_load(history, history_failed)
+      if len(sys.argv)>1 and sys.argv[1] == "history":
+         for v, k in sorted(history.items(), key=operator.itemgetter(1) ): # list of tuples
+            print(v, time.ctime(k), history_names[v] if v in history_names else None)
+         exit(0)
+      
+      for v, k in sorted(history_failed.items(), key=operator.itemgetter(1) ): # list of tuples
+         print(v, time.ctime(k), history_names[v] if v in history_names else None)
               
       failed = queue.Queue() # communication channel: Worker Thread => Main Thread 
       clp_recent_value = ""
       while True :
-         fix_history(failed, history, history_failed)
+         fix_history(failed, history, history_failed, history_names)
          tmp_value = str(pyperclip.paste())
          if tmp_value != clp_recent_value:
              clp_recent_value = tmp_value 
              if qualify_url(clp_recent_value) or len(clp_recent_value) == 11 : # clp_recent_value = "https://www.youtube.com/watch?v=".join(clp_recent_value)
                 if clp_recent_value not in history :
-                   history.add(clp_recent_value)
-                   history_failed.discard(clp_recent_value)
-                   new_download = threading.Thread(target=lambda : download(clp_recent_value, failed))
+                   history[clp_recent_value]=time.time()
+                   history_failed.pop(clp_recent_value, None) # discard
+                   new_download = threading.Thread(target=lambda : download(clp_recent_value, failed, history_names))
                    new_download.start()
-                   print("download thread started: %s %s" % (new_download.ident, new_download.name) )
+                   print("download thread started: %s" % (new_download.name) )
                 else : print("this url is already present in history: %s - request ignored" % (clp_recent_value) )
          time.sleep(WATCH_IDLE_PERIOD)
    except KeyboardInterrupt:
@@ -110,9 +140,9 @@ def main():
          if th != threading.current_thread():
             print( "joining %s, %s thread" % (th.ident, th.name) )
             th.join()
-      fix_history(failed, history, history_failed)
-      
-   save(history, history_failed)    
+      fix_history(failed, history, history_failed, history_names)
+
+   save(history, history_failed, history_names)
    print('Gracefully quitting')
 
 if __name__ == "__main__":
