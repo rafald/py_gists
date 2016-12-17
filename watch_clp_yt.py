@@ -24,7 +24,7 @@ def Destination(dump):
    return [l[PFX_LEN:] for l in dump.split('\n') if l.startswith(PFX)]
    
 def download(url, failed, history_names):
-   msg = "Launching youtube-dl to download %s" % (url)
+   msg = "Launching youtube-dl to download %s,%s" % (url, history_names[url] if url in history_names else None)
    print(msg)
    subprocess.run(['notify-send', '-u', 'critical', msg]) # call is nonblocking
    
@@ -112,8 +112,8 @@ def main():
       import operator
       
       if len(sys.argv)>1 and sys.argv[1] == "history":
-         for v, k in sorted(history.items(), key=operator.itemgetter(1) ): # list of tuples
-            print(v, time.ctime(k), history_names[v] if v in history_names else None)
+         for url, t in sorted(history.items(), key=operator.itemgetter(1) ): # list of tuples
+            print(url, time.ctime(t), history_names[url] if url in history_names else None)
          exit(0)
       
       for v, k in sorted(history_failed.items(), key=operator.itemgetter(1) ): # list of tuples
