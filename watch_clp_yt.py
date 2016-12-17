@@ -48,42 +48,55 @@ def idefault(o):
        o.__dict__
    else:
        return list(iterable)
-       
+
+HISTORY_FILE = 'history.json' # with open(history_file, 'wb') as f:
+HISTORY_FAILED_FILE = 'history_failed.json'
+HR_OPTS = dict(sort_keys=True, indent=4, default=idefault)
+
+def save(history, history_failed):
+   with open(HISTORY_FILE, 'w') as hf:
+       # Pickle the 'data' dictionary using the highest protocol available.
+       #pickle.dump(history, f, pickle.HIGHEST_PROTOCOL)
+       json.dump(history, hf, **HR_OPTS)
+   with open(HISTORY_FAILED_FILE, 'w') as hff:
+       # Pickle the 'data' dictionary using the highest protocol available.
+       #pickle.dump(history_failed, f, pickle.HIGHEST_PROTOCOL)
+       json.dump(history_failed, hff, **HR_OPTS)
+
+def try_load(history, history_failed):
+   if os.path.isfile(HISTORY_FILE) :
+      with open(HISTORY_FILE, 'r') as f:
+          # The protocol version used is detected automatically, so we do not
+          # have to specify it.
+          #history = pickle.load(f)
+          history = set(json.load(f))
+   else : print("Missing history file {} (OK if this is the 1st run)".format(HISTORY_FILE,))
+   if os.path.isfile(HISTORY_FAILED_FILE) :
+      with open(HISTORY_FAILED_FILE, 'r') as f:
+         #history_failed = pickle.load(f)
+         history_failed = set(json.load(f))
+         #outfile = options.outfile or sys.stdout
+         json.dump(HISTORY_FAILED_FILE, sys.stdout, **HR_OPTS)
+         sys.stdout.write('\n')
+         
+WATCH_IDLE_PERIOD = 1
+          
 def main():
    try:
-      hr_opts = dict(sort_keys=True, indent=4, default=idefault)
-      
+      # TODO merge to DS with .add .failed .retry
       history = set()
       history_failed = set()
-      history_file = 'history.json' # with open(history_file, 'wb') as f:
-      history_failed_file = 'history_failed.json'
-      if os.path.isfile(history_file) :
-         with open(history_file, 'r') as f:
-             # The protocol version used is detected automatically, so we do not
-             # have to specify it.
-             #history = pickle.load(f)
-             history = set(json.load(f))
-      if os.path.isfile(history_failed_file) :
-         with open(history_failed_file, 'r') as f:
-            #history_failed = pickle.load(f)
-            history_failed = set(json.load(f))
-            #outfile = options.outfile or sys.stdout
-            json.dump(history_failed, sys.stdout, **hr_opts)
-            sys.stdout.write('\n')
-             
-      else : print("Missing history file {} (OK if this is the 1st run)".format(history_file))
+      
+      try_load(history, history_failed)
               
-      failed = queue.Queue() # Worker Thread => Main Thread communication channel
+      failed = queue.Queue() # communication channel: Worker Thread => Main Thread 
       clp_recent_value = ""
-      pause = 1
-      url_predicate = qualify_url
       while True :
          fix_history(failed, history, history_failed)
          tmp_value = str(pyperclip.paste())
          if tmp_value != clp_recent_value:
-             #print("new value in clippboard: ", tmp_value)
-             clp_recent_value = tmp_value # http://www.pornhub.com/view_video.php?viewkey=ph5703ff3a2c289
-             if url_predicate(clp_recent_value) or len(clp_recent_value) == 11 : # clp_recent_value = "https://www.youtube.com/watch?v=".join(clp_recent_value)
+             clp_recent_value = tmp_value 
+             if qualify_url(clp_recent_value) or len(clp_recent_value) == 11 : # clp_recent_value = "https://www.youtube.com/watch?v=".join(clp_recent_value)
                 if clp_recent_value not in history :
                    history.add(clp_recent_value)
                    history_failed.discard(clp_recent_value)
@@ -91,23 +104,15 @@ def main():
                    new_download.start()
                    print("download thread started: %s %s" % (new_download.ident, new_download.name) )
                 else : print("this url is already present in history: %s - request ignored" % (clp_recent_value) )
-         time.sleep(pause)
+         time.sleep(WATCH_IDLE_PERIOD)
    except KeyboardInterrupt:
       for th in threading.enumerate():
          if th != threading.current_thread():
             print( "joining %s, %s thread" % (th.ident, th.name) )
             th.join()
       fix_history(failed, history, history_failed)
-            
-   with open(history_file, 'w') as hf:
-       # Pickle the 'data' dictionary using the highest protocol available.
-       #pickle.dump(history, f, pickle.HIGHEST_PROTOCOL)
-       json.dump(history, hf, **hr_opts)
-   with open(history_failed_file, 'w') as hff:
-       # Pickle the 'data' dictionary using the highest protocol available.
-       #pickle.dump(history_failed, f, pickle.HIGHEST_PROTOCOL)
-       json.dump(history_failed, hff, **hr_opts)
-       
+      
+   save(history, history_failed)    
    print('Gracefully quitting')
 
 if __name__ == "__main__":
