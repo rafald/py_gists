@@ -14,6 +14,8 @@ import shutil
 import pyperclip
 import pickle
 
+def cprint(*args):
+   print("[{}]".format(threading.current_thread().name), *args)
 ########################################################################
 def _qualify_url(url):
    if url.startswith("http") :
@@ -22,7 +24,7 @@ def _qualify_url(url):
 
 def _download(url, url_name, feedback):
    msg = "Launching youtube-dl to download %s | %s" % (url, "<name not yet discovered>" if url_name is None else url_name)
-   print(msg)
+   cprint(msg)
    subprocess.run(['notify-send', '-u', 'critical', msg]) # call is nonblocking
    
    cmd = ["youtube-dl", "-t", "--restrict-filenames", "-c", url]
@@ -33,9 +35,9 @@ def _download(url, url_name, feedback):
    
    th_name = threading.current_thread().name
    if completed.returncode != 0:
-      print ("FAILED %s! : %s" % (th_name, completed))
+      cprint ("FAILED %s! : %s" % (th_name, completed))
    else : 
-      print ("{} finished".format(th_name) )
+      cprint ("{} finished".format(th_name) )
 def _yt_preprocess(clp_recent_value):
    if len(clp_recent_value) == 11: 
       clp_recent_value = "https://www.youtube.com/watch?v=" + clp_recent_value
@@ -58,21 +60,31 @@ class YTDownloader:
                history_names[maybe_url] if maybe_url in history_names else None, 
                feedback))
             new_download.start()
-            print("download thread started: %s" % (new_download.name) )
-      else : print("this TASK_STRING is already present in processing history: %s - request ignored" % (maybe_url) )
+            cprint("download thread started: %s" % (new_download.name) )
+      else : cprint("this TASK_STRING is already present in processing history: %s - request ignored" % (maybe_url) )
 ########################################################################
       
 def fix_history(proc, feedback, history, history_failed, history_names):
+   update = False
    while not feedback.empty():
       url, completed = feedback.get() 
       dest_names = proc.DestinationNames(completed.stdout)
       if len(dest_names) :
          history_names[url] = dest_names
+      else: cprint("WARN: Could not parse: {}".format(completed.stdout))
       if completed.returncode != 0:
          history_failed[url] = history[url]
          del history[url]
       else:
-         print ("FINISHED with {}".format(history_names[url]) )
+         cprint ("FINISHED with {} {}".format(history_names.get(url), url) )
+      update = True
+   worker_active_count = threading.active_count() - 1 # exclude main thread
+   if update:
+      if worker_active_count:
+         cprint( "Running %d worker thread(s)" % (worker_active_count) )
+      else:
+         cprint( "No worker threads (IDLE)" )
+      
 
 def sdefault(o):
     if isinstance(o, set):
@@ -123,15 +135,15 @@ def try_load():
           # have to specify it.
           #history = pickle.load(f)
           history = json.load(f) #history = set(json.load(f))
-   else : print("Missing history file {} (OK if this is the 1st run)".format(HISTORY_FILE,))
+   else : cprint("Missing history file {} (OK if this is the 1st run)".format(HISTORY_FILE,))
    if os.path.isfile(HISTORY_FAILED_FILE) :
       with open(HISTORY_FAILED_FILE, 'r') as f:
-         print("loading HISTORY_FAILED_FILE")
+         cprint("loading HISTORY_FAILED_FILE")
          #history_failed = pickle.load(f)
          history_failed = json.load(f)
    if os.path.isfile(HISTORY_NAMES_FILE) :
       with open(HISTORY_NAMES_FILE, 'r') as f:
-         print("loading HISTORY_NAMES_FILE")
+         cprint("loading HISTORY_NAMES_FILE")
          #history_names = pickle.load(f)
          history_names = json.load(f) 
    return (history, history_failed, history_names)
@@ -147,11 +159,11 @@ def main():
       
       if len(sys.argv)>1 and sys.argv[1].startswith("hi"):
          for url, t in sorted(history.items(), key=operator.itemgetter(1) ): # list of tuples
-            print(url, time.ctime(t), history_names[url] if url in history_names else None)
+            cprint(url, time.ctime(t), history_names[url] if url in history_names else None)
          exit(0)
       
       for v, k in sorted(history_failed.items(), key=operator.itemgetter(1) ): # list of tuples
-         print(v, time.ctime(k), history_names[v] if v in history_names else None)
+         cprint(v, time.ctime(k), history_names[v] if v in history_names else None)
               
       feedback = queue.Queue() # communication channel: Worker Thread => Main Thread 
       clp_recent_value = ""
@@ -166,12 +178,12 @@ def main():
    except KeyboardInterrupt:
       for th in threading.enumerate():
          if th != threading.current_thread():
-            print( "joining %s, %s thread" % (th.ident, th.name) )
+            cprint( "joining %s, %s thread" % (th.ident, th.name) )
             th.join()
       fix_history(proc,feedback, history, history_failed, history_names)
 
    save(history, history_failed, history_names)
-   print('Gracefully quitting')
+   cprint('Gracefully quitting')
 
 if __name__ == "__main__":
     main()
