@@ -37,10 +37,8 @@ def _download(url, url_name, feedback):
    else : 
       print ("{} finished".format(th_name) )
 def _yt_preprocess(clp_recent_value):
-   print(clp_recent_value)
    if len(clp_recent_value) == 11: 
       clp_recent_value = "https://www.youtube.com/watch?v=" + clp_recent_value
-      print(clp_recent_value)
    return clp_recent_value
 
 # INTERFACE
@@ -50,28 +48,31 @@ class YTDownloader:
       PFX_LEN = len(PFX)
       return [l[PFX_LEN:] for l in log.split('\n') if l.startswith(PFX)]
       
-   def probe_processing(self, clp_recent_value, history, history_failed, history_names, feedback):
-      clp_recent_value = _yt_preprocess(clp_recent_value)
-      history_failed.pop(clp_recent_value, None) # discard
-      if _qualify_url(clp_recent_value):
-         history[clp_recent_value]=time.time()
-         new_download = threading.Thread(target=lambda : _download(clp_recent_value, 
-            history_names[clp_recent_value] if clp_recent_value in history_names else None, 
-            feedback))
-         new_download.start()
-         print("download thread started: %s" % (new_download.name) )
+   def probe_processing(self, maybe_url, history, history_failed, history_names, feedback):
+      maybe_url = _yt_preprocess(maybe_url)
+      if maybe_url not in history :
+         history_failed.pop(maybe_url, None) # discard
+         if _qualify_url(maybe_url):
+            history[maybe_url]=time.time()
+            new_download = threading.Thread(target=lambda : _download(maybe_url, 
+               history_names[maybe_url] if maybe_url in history_names else None, 
+               feedback))
+            new_download.start()
+            print("download thread started: %s" % (new_download.name) )
+      else : print("this TASK_STRING is already present in processing history: %s - request ignored" % (maybe_url) )
 ########################################################################
       
 def fix_history(proc, feedback, history, history_failed, history_names):
    while not feedback.empty():
-      url,completed = feedback.get() 
+      url, completed = feedback.get() 
       dest_names = proc.DestinationNames(completed.stdout)
-      history_names[url]= dest_names if len(dest_names) else None
+      if len(dest_names) :
+         history_names[url] = dest_names
       if completed.returncode != 0:
          history_failed[url] = history[url]
          del history[url]
       else:
-         print ("FINISHED with {}".format(dest_names) )
+         print ("FINISHED with {}".format(history_names[url]) )
 
 def sdefault(o):
     if isinstance(o, set):
@@ -158,11 +159,9 @@ def main():
          fix_history(proc,feedback, history, history_failed, history_names)
          tmp_value = str(pyperclip.paste())
          if tmp_value != clp_recent_value:
-             clp_recent_value = tmp_value 
-             if clp_recent_value not in history :
-                #TODO factory_from_string but then fix_history must receive specific correct object 
-                proc.probe_processing(clp_recent_value, history, history_failed, history_names, feedback)
-             else : print("this TASK_STRING is already present in processing history: %s - request ignored" % (clp_recent_value) )
+            clp_recent_value = tmp_value 
+            #TODO factory_from_string but then fix_history must receive specific correct object 
+            proc.probe_processing(clp_recent_value, history, history_failed, history_names, feedback)
          time.sleep(WATCH_IDLE_PERIOD)
    except KeyboardInterrupt:
       for th in threading.enumerate():
