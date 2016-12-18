@@ -23,8 +23,8 @@ def Destination(dump):
    PFX = "[download] Destination: "
    PFX_LEN = len(PFX)
    return [l[PFX_LEN:] for l in dump.split('\n') if l.startswith(PFX)]
-   
-def download(url, failed, history_names):
+
+def download(url, history_names, feedback):
    msg = "Launching youtube-dl to download %s,%s" % (url, history_names[url] if url in history_names else None)
    print(msg)
    subprocess.run(['notify-send', '-u', 'critical', msg]) # call is nonblocking
@@ -33,21 +33,21 @@ def download(url, failed, history_names):
    if "https_proxy" in os.environ :
       cmd.append("--proxy={}".format(os.environ['https_proxy']))
    completed = subprocess.run(cmd, stdout=subprocess.PIPE, universal_newlines=True) 
+   feedback.put( (url,completed) )
    
    th_name = threading.current_thread().name
    if completed.returncode != 0:
-      failed.put((url,completed.stdout))
       print ("FAILED %s! : %s" % (th_name, completed))
    else : 
       print ("FINISHED {}: {}".format(th_name, Destination(completed.stdout)) )
-      history_names[url] = Destination(completed.stdout) # TODO unsafe - pass back lamdba to failed queue not a value
-
-def fix_history(failed, history, history_failed, history_names):
-   while not failed.empty():
-      url,log = failed.get()
-      del history[url]
-      history_failed[url]=time.time()
-      history_names[url]=Destination(log)
+      
+def fix_history(feedback, history, history_failed, history_names):
+   while not feedback.empty():
+      url,completed = feedback.get() 
+      history_names[url]=Destination(completed.stdout)
+      if completed.returncode != 0:
+         history_failed[url] = history[url]
+         del history[url]
 
 def sdefault(o):
     if isinstance(o, set):
@@ -128,10 +128,10 @@ def main():
       for v, k in sorted(history_failed.items(), key=operator.itemgetter(1) ): # list of tuples
          print(v, time.ctime(k), history_names[v] if v in history_names else None)
               
-      failed = queue.Queue() # communication channel: Worker Thread => Main Thread 
+      feedback = queue.Queue() # communication channel: Worker Thread => Main Thread 
       clp_recent_value = ""
       while True :
-         fix_history(failed, history, history_failed, history_names)
+         fix_history(feedback, history, history_failed, history_names)
          tmp_value = str(pyperclip.paste())
          if tmp_value != clp_recent_value:
              clp_recent_value = tmp_value 
@@ -139,7 +139,7 @@ def main():
                 if clp_recent_value not in history :
                    history[clp_recent_value]=time.time()
                    history_failed.pop(clp_recent_value, None) # discard
-                   new_download = threading.Thread(target=lambda : download(clp_recent_value, failed, history_names))
+                   new_download = threading.Thread(target=lambda : download(clp_recent_value, history_names, feedback))
                    new_download.start()
                    print("download thread started: %s" % (new_download.name) )
                 else : print("this url is already present in history: %s - request ignored" % (clp_recent_value) )
@@ -149,13 +149,10 @@ def main():
          if th != threading.current_thread():
             print( "joining %s, %s thread" % (th.ident, th.name) )
             th.join()
-      fix_history(failed, history, history_failed, history_names)
+      fix_history(feedback, history, history_failed, history_names)
 
    save(history, history_failed, history_names)
    print('Gracefully quitting')
 
 if __name__ == "__main__":
     main()
-
-# TODO save restore database of downloaded links - ??? serialize dict ?
-# store failed jobs - retry after restart
