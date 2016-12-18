@@ -21,7 +21,7 @@ def _qualify_url(url):
    return False
 
 def _download(url, url_name, feedback):
-   msg = "Launching youtube-dl to download %s,%s" % (url, url_name)
+   msg = "Launching youtube-dl to download %s | %s" % (url, "<name not yet discovered>" if url_name is None else url_name)
    print(msg)
    subprocess.run(['notify-send', '-u', 'critical', msg]) # call is nonblocking
    
@@ -136,7 +136,7 @@ def main():
       history, history_failed, history_names = try_load()
       import operator
       
-      if len(sys.argv)>1 and sys.argv[1] == "history":
+      if len(sys.argv)>1 and sys.argv[1].startswith("hi"):
          for url, t in sorted(history.items(), key=operator.itemgetter(1) ): # list of tuples
             print(url, time.ctime(t), history_names[url] if url in history_names else None)
          exit(0)
