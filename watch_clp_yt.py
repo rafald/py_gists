@@ -36,6 +36,12 @@ def _download(url, url_name, feedback):
       print ("FAILED %s! : %s" % (th_name, completed))
    else : 
       print ("{} finished".format(th_name) )
+def _yt_preprocess(clp_recent_value):
+   print(clp_recent_value)
+   if len(clp_recent_value) == 11: 
+      clp_recent_value = "https://www.youtube.com/watch?v=" + clp_recent_value
+      print(clp_recent_value)
+   return clp_recent_value
 
 # INTERFACE
 class YTDownloader:
@@ -44,8 +50,10 @@ class YTDownloader:
       PFX_LEN = len(PFX)
       return [l[PFX_LEN:] for l in log.split('\n') if l.startswith(PFX)]
       
-   def probe_processing(self, clp_recent_value, history, history_names, feedback):
-      if _qualify_url(clp_recent_value) or len(clp_recent_value) == 11 : # clp_recent_value = "https://www.youtube.com/watch?v=".join(clp_recent_value)
+   def probe_processing(self, clp_recent_value, history, history_failed, history_names, feedback):
+      clp_recent_value = _yt_preprocess(clp_recent_value)
+      history_failed.pop(clp_recent_value, None) # discard
+      if _qualify_url(clp_recent_value):
          history[clp_recent_value]=time.time()
          new_download = threading.Thread(target=lambda : _download(clp_recent_value, 
             history_names[clp_recent_value] if clp_recent_value in history_names else None, 
@@ -152,9 +160,8 @@ def main():
          if tmp_value != clp_recent_value:
              clp_recent_value = tmp_value 
              if clp_recent_value not in history :
-                history_failed.pop(clp_recent_value, None) # discard
                 #TODO factory_from_string but then fix_history must receive specific correct object 
-                proc.probe_processing(clp_recent_value, history, history_names, feedback)
+                proc.probe_processing(clp_recent_value, history, history_failed, history_names, feedback)
              else : print("this TASK_STRING is already present in processing history: %s - request ignored" % (clp_recent_value) )
          time.sleep(WATCH_IDLE_PERIOD)
    except KeyboardInterrupt:
