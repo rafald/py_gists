@@ -9,6 +9,7 @@ import queue # multiprocessing.Queue
 import json
 from collections import defaultdict
 import time
+import shutil
 
 import pyperclip
 import pickle
@@ -19,7 +20,7 @@ def qualify_url(url):
     return False
 
 def Destination(dump):
-   PFX = "[download] Destination:"
+   PFX = "[download] Destination: "
    PFX_LEN = len(PFX)
    return [l[PFX_LEN:] for l in dump.split('\n') if l.startswith(PFX)]
    
@@ -61,12 +62,20 @@ def idefault(o):
    else:
        return list(iterable)
 
+def backup(backup_directory, *files):
+   if not os.path.exists(backup_directory):
+       os.makedirs(backup_directory)
+   seq_no = time.time() % 21 # quasi random [0,21]
+   for f in files:
+      shutil.move( f, os.path.join(backup_directory,"%d_%s" % (seq_no, f)))
+   
 HISTORY_FILE = 'history.json' # with open(history_file, 'wb') as f:
 HISTORY_FAILED_FILE = 'history_failed.json'
 HISTORY_NAMES_FILE = 'history_names.json'
 HR_OPTS = dict(sort_keys=True, indent=4, default=idefault)
 
 def save(history, history_failed, history_names):
+   backup("backup", HISTORY_FILE, HISTORY_FAILED_FILE, HISTORY_NAMES_FILE)
    with open(HISTORY_FILE, 'w') as hf:
        # Pickle the 'data' dictionary using the highest protocol available.
        #pickle.dump(history, f, pickle.HIGHEST_PROTOCOL)
