@@ -167,16 +167,18 @@ def main():
          elif sys.argv[1].startswith("cl"):
             for k in list(history_failed.keys()):
                if history_names.get(k) is None:
+                  cprint("removing {}".format(k))
                   del history_failed[k]
+      cprint( "pid is {}".format(os.getpid()) )
       
       for v, k in sorted(history_failed.items(), key=operator.itemgetter(1) ): # list of tuples
          cprint(v, time.ctime(k), history_names[v] if v in history_names else None)
               
       feedback = queue.Queue() # communication channel: Worker Thread => Main Thread 
-      clp_recent_value = ""
+      clp_recent_value = None
       while True :
          fix_history(proc,feedback, history, history_failed, history_names)
-         tmp_value = str(pyperclip.paste())
+         tmp_value = str(pyperclip.paste()) # not tmp_value is None 
          if tmp_value != clp_recent_value:
             clp_recent_value = tmp_value 
             #TODO factory_from_string but then fix_history must receive specific correct object 
