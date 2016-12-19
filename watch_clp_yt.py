@@ -11,8 +11,10 @@ from collections import defaultdict
 import time
 import shutil
 
+import signal
 import pyperclip
-import pickle
+#import pickle
+import operator
 
 def cprint(*args):
    print("[{}]".format(threading.current_thread().name), *args)
@@ -31,7 +33,7 @@ def _download(url, url_name, feedback):
    if "https_proxy" in os.environ :
       cmd.append("--proxy={}".format(os.environ['https_proxy']))
    completed = subprocess.run(cmd, stdout=subprocess.PIPE, universal_newlines=True) 
-   feedback.put( (url,completed) )
+   feedback.put( (url,completed) ) # now main thread processes concurently, can display before next cprintf()
    
    th_name = threading.current_thread().name
    if completed.returncode != 0:
@@ -81,9 +83,9 @@ def fix_history(proc, feedback, history, history_failed, history_names):
    worker_active_count = threading.active_count() - 1 # exclude main thread
    if update:
       if worker_active_count:
-         cprint( "Running %d worker thread(s)" % (worker_active_count) )
+         cprint( "[%d] Running %d worker thread(s)" % (os.getpid(), worker_active_count) )
       else:
-         cprint( "No worker threads (IDLE)" )
+         cprint( "[%d] No worker threads (IDLE)" % (os.getpid()))
       
 
 def sdefault(o):
@@ -147,7 +149,7 @@ def try_load():
          #history_names = pickle.load(f)
          history_names = json.load(f) 
    return (history, history_failed, history_names)
-         
+
 WATCH_IDLE_PERIOD = 1
 def main():
    proc = YTDownloader()
@@ -155,12 +157,17 @@ def main():
       # TODO merge (history, history_failed) to DS with .add .failed .retry
       # can also sync with json repr on hd
       history, history_failed, history_names = try_load()
-      import operator
+      signal.signal( signal.SIGHUP, lambda sig, frm: save(history, history_failed, history_names) )
       
-      if len(sys.argv)>1 and sys.argv[1].startswith("hi"):
-         for url, t in sorted(history.items(), key=operator.itemgetter(1) ): # list of tuples
-            cprint(url, time.ctime(t), history_names[url] if url in history_names else None)
-         exit(0)
+      if len(sys.argv)>1 :
+         if sys.argv[1].startswith("hi"):
+            for url, t in sorted(history.items(), key=operator.itemgetter(1) ): # list of tuples
+               cprint(url, time.ctime(t), history_names[url] if url in history_names else None)
+            exit(0)
+         elif sys.argv[1].startswith("cl"):
+            for k in list(history_failed.keys()):
+               if history_names.get(k) is None:
+                  del history_failed[k]
       
       for v, k in sorted(history_failed.items(), key=operator.itemgetter(1) ): # list of tuples
          cprint(v, time.ctime(k), history_names[v] if v in history_names else None)
