@@ -2,6 +2,7 @@
 def test():
     """Stupid test function"""
     L = [i for i in range(100)]
+    print(L)
 
 if __name__ == '__main__':
     import timeit
