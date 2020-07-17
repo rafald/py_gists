@@ -22,7 +22,7 @@ def isWitness(possibleWitness, p, exponent, remainder):
 
 
 def probablyPrime(p, accuracy=100):
-    if p == 2 or p == 3:
+    if p in (2,3):
         return True
     if p < 2 or p % 2 == 0:
         return False
