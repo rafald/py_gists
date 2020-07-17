@@ -98,7 +98,7 @@ def idefault(o):
    try:
        iterable = iter(o)
    except TypeError:
-       o.__dict__
+       print(o.__dict__)
    else:
        return list(iterable)
 
