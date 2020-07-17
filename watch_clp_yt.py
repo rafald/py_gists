@@ -8,7 +8,6 @@ import sys
 import queue # multiprocessing.Queue
 import json
 from collections import defaultdict
-import time
 import shutil
 
 import signal
