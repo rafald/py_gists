@@ -26,12 +26,12 @@ def _qualify_url(url):
 def _download(url, url_name, feedback):
    msg = "Launching youtube-dl to download %s | %s" % (url, "<name not yet discovered>" if url_name is None else url_name)
    cprint(msg)
-   subprocess.run(['notify-send', '-u', 'critical', msg]) # call is nonblocking
+   subprocess.run(['notify-send', '-u', 'critical', msg], check=True) # call is nonblocking
    
    cmd = ["youtube-dl", "-t", "--restrict-filenames", "-c", url]
    if "https_proxy" in os.environ :
       cmd.append("--proxy={}".format(os.environ['https_proxy']))
-   completed = subprocess.run(cmd, stdout=subprocess.PIPE, universal_newlines=True) 
+   completed = subprocess.run(cmd, stdout=subprocess.PIPE, universal_newlines=True, check=True) 
    feedback.put( (url,completed) ) # now main thread processes concurently, can display before next cprintf()
    
    th_name = threading.current_thread().name
