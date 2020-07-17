@@ -26,7 +26,7 @@ def _qualify_url(url):
 def _download(url, url_name, feedback):
    msg = "Launching youtube-dl to download %s | %s" % (url, "<name not yet discovered>" if url_name is None else url_name)
    cprint(msg)
-   subprocess.run(['notify-send', '-u', 'critical', msg], check=True) # call is nonblocking
+   subprocess.run(['/usr/bin/notify-send', '-u', 'critical', msg], check=True) # call is nonblocking
    
    cmd = ["youtube-dl", "-t", "--restrict-filenames", "-c", url]
    if "https_proxy" in os.environ :
