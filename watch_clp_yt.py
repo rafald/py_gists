@@ -70,7 +70,7 @@ def fix_history(proc, feedback, history, history_failed, history_names):
    while not feedback.empty():
       url, completed = feedback.get() 
       dest_names = proc.DestinationNames(completed.stdout)
-      if len(dest_names) :
+      if dest_names :
          history_names[url] = dest_names
       else: cprint("WARN: Could not parse: {}".format(completed.stdout))
       if completed.returncode != 0:
