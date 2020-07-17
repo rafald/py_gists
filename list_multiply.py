@@ -10,5 +10,5 @@ print (myList)
 
 betterList = [[1]*4 for n in range(3)]
 betterList[1][1] = 7
-print betterList
+print (betterList)
 
