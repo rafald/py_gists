@@ -46,12 +46,14 @@ def _yt_preprocess(clp_recent_value):
 
 # INTERFACE
 class YTDownloader:
-   def DestinationNames(self, log):
+   @staticmethod
+   def DestinationNames(log):
       PFX = "[download] Destination: "
       PFX_LEN = len(PFX)
       return [l[PFX_LEN:] for l in log.split('\n') if l.startswith(PFX)]
       
-   def probe_processing(self, maybe_url, history, history_failed, history_names, feedback):
+   @staticmethod
+   def probe_processing(maybe_url, history, history_failed, history_names, feedback):
       maybe_url = _yt_preprocess(maybe_url)
       if maybe_url not in history :
          history_failed.pop(maybe_url, None) # discard
