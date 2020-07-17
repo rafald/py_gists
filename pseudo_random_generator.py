@@ -60,7 +60,7 @@ def parity(n):
     return sum(int(x) for x in bin(n)[2:]) % 2
 
 
-class BlumBlumShub(object):
+class BlumBlumShub():
     def __init__(self, seed=None):
         self.modulus = makeModulus()
         self.state = seed if seed is not None else random.randint(2, self.modulus - 1)
